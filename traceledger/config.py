@@ -13,6 +13,7 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "fan_in": 0.5,
     "high_risk_corridor": 0.4,
     "round_trip": 0.7,
+    "dormant_account": 0.6,
 }
 
 
@@ -60,6 +61,12 @@ class RuleConfig:
     roundtrip_window_days: int = 14
     roundtrip_max_length: int = 4
     roundtrip_min_ratio: float = 0.85
+
+    # Dormant account: high-value outbound transfer after an inactive period
+    dormant_inactive_days: int = 30
+    dormant_min_amount: float = 5_000.0
+    dormant_amount_multiplier: float = 3.0
+    dormant_min_history: int = 3
 
     # Scoring
     weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))

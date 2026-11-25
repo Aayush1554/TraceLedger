@@ -1,4 +1,4 @@
-# Example amlwatch configuration. Any key left out keeps its default.
+# Example TraceLedger configuration. Any key left out keeps its default.
 # Thresholds here are illustrative; calibrate them to your own book.
 
 reporting_threshold = 10000
@@ -27,6 +27,11 @@ roundtrip_window_days = 14
 roundtrip_max_length = 4
 roundtrip_min_ratio = 0.85
 
+dormant_inactive_days = 30
+dormant_min_amount = 5000
+dormant_amount_multiplier = 3
+dormant_min_history = 3
+
 anomaly_weight = 0.3
 anomaly_review_quantile = 0.99
 
@@ -36,3 +41,4 @@ pass_through = 0.5
 fan_in = 0.5
 high_risk_corridor = 0.4
 round_trip = 0.7
+dormant_account = 0.6

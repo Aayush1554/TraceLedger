@@ -9,3 +9,11 @@ dist/
 *.csv
 *.parquet
 report.html
+traceledger.db
+traceledger.db-shm
+traceledger.db-wal
+.env
+.env.*
+!.env.example
+uploads/
+docs/screenshots/*.tmp

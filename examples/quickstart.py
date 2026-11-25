@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from amlwatch import Monitor, RuleConfig, generate_transactions
+from traceledger import Monitor, RuleConfig, generate_transactions
 
 pd.set_option("display.width", 160)
 pd.set_option("display.max_colwidth", 90)

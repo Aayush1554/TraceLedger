@@ -1,9 +1,16 @@
 import pandas as pd
 import pytest
 
-from amlwatch import Monitor, RuleConfig, SchemaError
-from amlwatch.rules import fan_in, high_risk_corridor, pass_through, round_trip, structuring
-from amlwatch.schema import prepare
+from traceledger import Monitor, RuleConfig, SchemaError
+from traceledger.rules import (
+    dormant_reactivation,
+    fan_in,
+    high_risk_corridor,
+    pass_through,
+    round_trip,
+    structuring,
+)
+from traceledger.schema import prepare
 
 CFG = RuleConfig()
 
@@ -96,9 +103,62 @@ def test_round_trip_requires_forward_time_order():
     assert round_trip(frame(rows), CFG) == []
 
 
+def test_dormant_reactivation_flags_high_value_outbound_transfer():
+    rows = [
+        (t(0), "C00001", "X1", 500, "transfer", "SC", "SC"),
+        (t(1), "X2", "C00001", 800, "transfer", "SC", "SC"),
+        (t(2), "C00001", "X3", 1_000, "transfer", "SC", "SC"),
+        (t(40), "C00001", "X4", 10_000, "transfer", "SC", "GB"),
+    ]
+    alerts = dormant_reactivation(frame(rows), CFG)
+    assert len(alerts) == 1
+    assert alerts[0].rule == "dormant_account"
+    assert alerts[0].txn_ids == ["T0", "T1", "T2", "T3"]
+    assert alerts[0].suspicious_txn_ids == ["T3"]
+    assert alerts[0].amount == 10_000
+    assert alerts[0].first_seen == alerts[0].last_seen == t(40)
+    assert "38 days" in alerts[0].detail
+
+
+def test_dormant_reactivation_ignores_low_value_or_recent_transfers():
+    rows = [
+        (t(0), "C00001", "X1", 500, "transfer", "SC", "SC"),
+        (t(1), "X2", "C00001", 800, "transfer", "SC", "SC"),
+        (t(2), "C00001", "X3", 1_000, "transfer", "SC", "SC"),
+        (t(10), "C00001", "X4", 10_000, "transfer", "SC", "GB"),
+        (t(45), "C00001", "X5", 2_000, "transfer", "SC", "GB"),
+    ]
+    assert dormant_reactivation(frame(rows), CFG) == []
+
+
 def test_schema_rejects_missing_columns():
     with pytest.raises(SchemaError):
         Monitor().run(pd.DataFrame({"amount": [1.0]}))
+
+
+def test_schema_rejects_duplicate_transaction_ids():
+    df = pd.DataFrame({
+        "txn_id": ["same", "same"], "timestamp": [t(0), t(1)],
+        "sender": ["C00001", "C00001"], "receiver": ["X1", "X2"],
+        "amount": [100, 200], "channel": ["transfer", "transfer"],
+    })
+    with pytest.raises(SchemaError, match="identifiers must be unique"):
+        Monitor().run(df)
+
+
+def test_schema_rejects_missing_required_values():
+    df = pd.DataFrame({
+        "txn_id": ["T1"], "timestamp": [t(0)], "sender": [None],
+        "receiver": ["C00001"], "amount": [100], "channel": ["transfer"],
+    })
+    with pytest.raises(SchemaError, match="missing required values"):
+        Monitor().run(df)
+
+
+def test_schema_rejects_empty_transaction_table():
+    df = pd.DataFrame(columns=["txn_id", "timestamp", "sender", "receiver", "amount", "channel"])
+    with pytest.raises(SchemaError, match="at least one row"):
+        Monitor().run(df)
 
 
 def test_explicit_customer_flags_override_pattern():

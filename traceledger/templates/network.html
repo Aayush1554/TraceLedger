@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}TraceLedger · Network explorer{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="{{ url_for('dashboard') }}">← Case dashboard</a></div>
+<section class="page-heading"><div><p class="eyebrow">TRANSACTION RELATIONSHIPS</p><h1>Network explorer</h1>
+  <p class="muted">Explore directed transfers, counterparties and investigated circular paths.</p></div></section>
+<section class="panel"><form class="network-search" action="{{ url_for('network_explorer') }}" method="get">
+  {% if dataset_id %}<input type="hidden" name="dataset_id" value="{{ dataset_id }}">{% endif %}
+  <label>Account identifier<input name="customer" required value="{{ customer }}" placeholder="e.g. C00042"></label>
+  <label>Flow view<select name="flow">{% for item in flows %}<option value="{{ item }}" {% if flow == item %}selected{% endif %}>{{ item|replace('-', ' ')|title }}</option>{% endfor %}</select></label>
+  <button type="submit">Explore network</button>
+</form></section>
+{% if customer %}
+<section class="panel"><div class="section-title"><div><p class="eyebrow">{{ flow|replace('-', ' ')|upper }} · {{ transactions|length }} TRANSACTIONS</p><h2>Account {{ customer }}</h2></div><span class="muted">Hover an edge for transaction ID and timestamp</span></div>
+  {% if transactions %}{% include "_network.html" %}
+  <div class="table-wrap"><table><thead><tr><th>Transaction</th><th>Timestamp</th><th>From → To</th><th>Amount</th><th>Channel</th></tr></thead><tbody>
+    {% for txn in transactions %}<tr><td>{{ txn.txn_id }}</td><td>{{ txn.timestamp[:16]|replace("T", " ") }}</td><td>{{ txn.sender }} → {{ txn.receiver }}</td><td>{{ "%.2f"|format(txn.amount) }}</td><td>{{ txn.channel|title }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state"><h3>No matching transactions</h3><p>Scan a CSV first, or select a different flow view.</p></div>{% endif %}
+</section>
+{% else %}<section class="panel empty-state"><h3>Choose an account</h3><p>Scan a transaction CSV, then enter an account identifier to explore its network.</p></section>{% endif %}
+{% endblock %}

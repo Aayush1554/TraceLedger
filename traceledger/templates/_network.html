@@ -1,0 +1,25 @@
+<div class="network-wrap">
+  {% if network.edges %}
+  <svg class="network" viewBox="0 0 880 390" role="img" aria-label="Directed transaction network">
+    <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#6d8198"></path></marker></defs>
+    {% for edge in network.edges %}
+    <g class="network-edge {% if edge.suspicious %}suspicious-edge{% endif %}">
+      <path d="{{ edge.path }}" marker-end="url(#arrow)"></path>
+      <title>{{ edge.txn_id }} · {{ edge.amount }} · {{ edge.timestamp }}</title>
+      {% if edge.show_amount %}<text x="{{ edge.label_x }}" y="{{ edge.label_y }}">{{ edge.amount }}</text>{% endif %}
+    </g>
+    {% endfor %}
+    {% for node in network.nodes %}
+    <a class="network-node-link" href="{{ url_for('network_explorer', customer=node.label, flow='all', dataset_id=network.dataset_id) }}" aria-label="Explore account {{ node.label }}">
+    <g class="network-node {% if node.suspicious %}node-suspicious{% endif %}">
+      <title>Click to explore {{ node.label }}</title>
+      <circle cx="{{ node.x }}" cy="{{ node.y }}" r="19"></circle>
+      <text class="node-label" x="{{ node.x }}" y="{{ node.y + 36 }}">{{ node.label }}</text>
+    </g>
+    </a>
+    {% endfor %}
+  </svg>
+  <div class="network-legend"><span><i class="legend-dot"></i> Selected account</span><span><i class="legend-line"></i> Directed transaction · red marks suspicious evidence</span><span>Click an account to explore its network</span></div>
+  {% else %}<p class="muted">Transaction details are not available for this case.</p>{% endif %}
+</div>

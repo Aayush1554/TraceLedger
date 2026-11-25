@@ -1,22 +1,21 @@
-# Contributing to amlwatch
+# Contributing to TraceLedger
 
 Issues and pull requests are welcome.
 
 ## Getting started
 
 ```bash
-git clone https://github.com/rsinon/amlwatch.git
-cd amlwatch
-pip install -e ".[dev]"
-pytest
-ruff check amlwatch tests
+# From the TraceLedger repository root:
+python -m pip install -e ".[dev]"
+python -m pytest
+python -m ruff check traceledger tests
 ```
 
 ## Pull requests
 
 - Keep each pull request to one change, with a short explanation of what it does and why.
 - Add or update tests for any change in behaviour.
-- Run `pytest` and `ruff check` before opening the pull request; CI runs both.
+- Run `python -m pytest` and `python -m ruff check traceledger tests` before opening the pull request; CI runs both.
 - Use clear names and docstrings. Readability matters more than brevity here.
 
 ## Reporting issues

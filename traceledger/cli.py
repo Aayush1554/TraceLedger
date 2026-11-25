@@ -1,8 +1,9 @@
-"""Command-line interface: ``amlwatch generate | scan``."""
+"""TraceLedger command-line interface."""
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -12,6 +13,13 @@ from . import __version__
 from .config import RuleConfig
 from .monitor import Monitor
 from .synth import SynthConfig, generate_transactions
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    from .web import run_server
+
+    run_server(host=args.host, port=args.port, database=args.db)
+    return 0
 
 
 def _read(path: Path) -> pd.DataFrame:
@@ -41,7 +49,9 @@ def cmd_scan(args: argparse.Namespace) -> int:
 
     if args.alerts:
         out = result.alerts.drop(columns=["txn_ids"]).assign(
-            txn_ids=result.alerts["txn_ids"].str.join(" "))
+            txn_ids=result.alerts["txn_ids"].str.join(" "),
+            suspicious_txn_ids=result.alerts["suspicious_txn_ids"].str.join(" "),
+        )
         out.to_csv(args.alerts, index=False)
         print(f"Alerts written to {args.alerts}")
     if args.report:
@@ -57,8 +67,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="amlwatch", description="Open-source AML transaction monitoring")
-    p.add_argument("--version", action="version", version=f"amlwatch {__version__}")
+    p = argparse.ArgumentParser(prog="traceledger", description="AML monitoring and investigation workspace")
+    p.add_argument("--version", action="version", version=f"TraceLedger {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
 
     g = sub.add_parser("generate", help="create a labelled synthetic dataset")
@@ -75,6 +85,17 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--report", type=Path, help="write an HTML report here")
     s.add_argument("--alerts", type=Path, help="write the alert table as CSV here")
     s.set_defaults(func=cmd_scan)
+
+    w = sub.add_parser("serve", help="start the local investigation dashboard")
+    w.add_argument("--host", default="127.0.0.1", help="bind address (defaults to loopback only)")
+    w.add_argument("--port", type=int, default=5000)
+    w.add_argument(
+        "--db",
+        type=Path,
+        default=Path(os.environ.get("TRACELEDGER_DB", "traceledger.db")),
+        help="SQLite case database (or set TRACELEDGER_DB)",
+    )
+    w.set_defaults(func=cmd_serve)
     return p
 
 

@@ -3,19 +3,20 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "amlwatch"
-version = "0.1.0"
-description = "Open-source anti-money-laundering transaction monitoring: explainable rules, anomaly scoring and synthetic test data."
+name = "traceledger"
+version = "0.2.0"
+description = "Explainable AML monitoring, transaction network analysis, and financial investigations."
 readme = "README.md"
 license = "MIT"
-authors = [{ name = "Rudy Sinon" }]
+authors = [{ name = "Aayush Hudda" }]
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",
     "pandas>=2.1",
     "scikit-learn>=1.4",
+    "Flask>=3.0,<4.0",
 ]
-keywords = ["aml", "anti-money-laundering", "transaction-monitoring", "fintech", "compliance", "fraud", "anomaly-detection"]
+keywords = ["aml", "anti-money-laundering", "transaction-monitoring", "fintech", "compliance", "anomaly-detection", "investigations"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Intended Audience :: Financial and Insurance Industry",
@@ -27,14 +28,13 @@ classifiers = [
 dev = ["pytest>=8", "ruff>=0.5"]
 
 [project.scripts]
-amlwatch = "amlwatch.cli:main"
-
-[project.urls]
-Homepage = "https://github.com/rsinon/amlwatch"
-Issues = "https://github.com/rsinon/amlwatch/issues"
+traceledger = "traceledger.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["amlwatch*"]
+include = ["traceledger*"]
+
+[tool.setuptools.package-data]
+traceledger = ["templates/*.html", "static/*.css"]
 
 [tool.ruff]
 line-length = 105

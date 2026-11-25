@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}TraceLedger · Case dashboard{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div><p class="eyebrow">INVESTIGATION OVERVIEW</p><h1>Case dashboard</h1>
+    <p class="muted">Review explainable monitoring alerts and manage their investigation lifecycle.</p></div>
+  <form class="upload-form" action="{{ url_for('scan') }}" method="post" enctype="multipart/form-data">
+    <label for="transactions">Scan a transaction CSV</label>
+    <div class="upload-row"><input id="transactions" name="transactions" type="file" accept=".csv" required>
+      <button type="submit">Run scan</button></div>
+    <small>Required: txn_id, timestamp, sender, receiver, amount, channel.</small>
+  </form>
+</section>
+{% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<section class="metric-grid dashboard-metrics">
+  <article class="metric"><span>Transactions · latest scan</span><strong>{{ "{:,}".format(dashboard.transactions) }}</strong></article>
+  <article class="metric"><span>Suspicious customers · latest scan</span><strong>{{ dashboard.suspicious_customers }}</strong></article>
+  <article class="metric metric-alert"><span>Alerts · latest scan</span><strong>{{ dashboard.alerts }}</strong></article>
+  <article class="metric"><span>Investigation cases · all scans</span><strong>{{ summary.total }}</strong></article>
+  <article class="metric"><span>Open</span><strong>{{ summary.open }}</strong></article>
+  <article class="metric"><span>Under review</span><strong>{{ summary.review }}</strong></article>
+  <article class="metric metric-alert"><span>Escalated</span><strong>{{ summary.escalated }}</strong></article>
+  <article class="metric"><span>Closed</span><strong>{{ summary.closed }}</strong></article>
+</section>
+<section class="dashboard-grid">
+  <section class="panel">
+    <div class="section-title"><div><p class="eyebrow">LATEST SCAN</p><h2>Case risk distribution</h2></div></div>
+    {% if dashboard.alerts %}
+    <div class="risk-distribution">
+      {% for item in dashboard.risk_distribution %}
+      <div class="risk-row"><span>{{ item.label }}</span>
+        <div class="risk-track"><span class="risk-fill risk-{{ item.key }}" style="width: {{ item.percent }}%"></span></div>
+        <b>{{ item.count }}</b></div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="muted">Scan a transaction file to see case risk scores.</p>{% endif %}
+  </section>
+  <section class="panel">
+    <div class="section-title"><div><p class="eyebrow">EVIDENCE DATES</p><h2>Detection trend</h2></div></div>
+    {% if dashboard.trends %}
+    <div class="trend-bars" role="img" aria-label="Alert counts grouped by evidence date">
+      {% for item in dashboard.trends %}
+      <div class="trend-item" title="{{ item.alerts }} alerts, {{ item.customers }} customers">
+        <b>{{ item.alerts }}</b><div class="trend-track">
+          <span class="trend-fill" style="height: {{ item.bar_percent }}%"></span></div>
+        <span>{{ item.evidence_date }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="muted">Daily counts for the 10 most recent evidence dates in the latest scan.</p>
+    {% else %}<p class="muted">No alert activity is available yet.</p>{% endif %}
+  </section>
+</section>
+<section class="panel">
+  <div class="section-title"><div><p class="eyebrow">TRANSACTION RELATIONSHIPS</p><h2>Network explorer</h2></div></div>
+  <form class="network-search" action="{{ url_for('network_explorer') }}" method="get">
+    <label>Account identifier<input name="customer" required placeholder="e.g. C00042"></label>
+    <label>Flow view<select name="flow"><option value="all">All account activity</option><option value="fan-in">Incoming · fan-in</option><option value="fan-out">Outgoing · fan-out</option><option value="circular">Circular-flow evidence</option></select></label>
+    <button type="submit">Explore network</button>
+  </form>
+</section>
+<section class="panel">
+  <div class="section-title"><div><p class="eyebrow">PRIORITIZED QUEUE</p><h2>Investigation cases</h2></div>
+    <form method="get" class="filter-form"><label for="status">Status</label>
+      <select id="status" name="status" onchange="this.form.submit()">
+        <option value="">All statuses</option>
+        {% for status in statuses %}<option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}
+      </select>
+    </form>
+  </div>
+  {% if cases %}
+  <div class="table-wrap"><table><thead><tr><th>Case</th><th>Customer</th><th>Typology</th><th>Risk</th><th>Status</th><th>Investigator</th><th>Last seen</th></tr></thead>
+    <tbody>{% for case in cases %}<tr>
+      <td><a class="case-link" href="{{ url_for('case_detail', case_id=case.case_id) }}">{{ case.case_id }}</a></td>
+      <td>{{ case.customer }}</td><td>{{ case.rule|replace('_', ' ')|title }}</td>
+      <td><span class="risk">{{ "%.1f"|format(case.risk_score) }}</span></td>
+      <td><span class="status status-{{ case.status|lower|replace(' ', '-') }}">{{ case.status }}</span></td>
+      <td>{{ case.assigned_to or "Unassigned" }}</td><td>{{ case.last_seen[:16]|replace("T", " ") }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<div class="empty-state"><div class="empty-icon">◎</div><h3>No cases yet</h3>
+    <p>Upload a CSV transaction ledger to run the detection rules and create explainable cases.</p></div>{% endif %}
+</section>
+<section class="panel">
+  <div class="section-title"><div><p class="eyebrow">INVESTIGATION AUDIT</p><h2>Recent case activity</h2></div></div>
+  {% if dashboard.recent_activity %}
+  <ol class="timeline activity-timeline">
+    {% for event in dashboard.recent_activity %}
+    <li><b>{{ event.action }}</b><span>{{ event.created_at[:16]|replace("T", " ") }} · {{ event.actor }}</span>
+      <p><a class="case-link" href="{{ url_for('case_detail', case_id=event.case_id) }}">{{ event.customer }} · {{ event.rule|replace('_', ' ')|title }}</a>
+        {% if event.old_value or event.new_value %} · {{ event.old_value }}{% if event.old_value %} → {% endif %}{{ event.new_value }}{% endif %}
+      </p>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}<p class="muted">Case creation, status changes, assignments, and notes will appear here.</p>{% endif %}
+</section>
+{% endblock %}

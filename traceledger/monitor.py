@@ -11,7 +11,7 @@ import pandas as pd
 from .config import RuleConfig
 from .rules import RULES, Alert
 from .schema import prepare
-from .scoring import anomaly_scores, customer_features
+from .scoring import anomaly_explanations, anomaly_scores, customer_features
 
 
 @dataclass
@@ -62,6 +62,25 @@ class MonitoringResult:
 
         return evaluate(self)
 
+    def threshold_sweep(self, thresholds=(20, 40, 60, 80)) -> pd.DataFrame | None:
+        """Evaluate combined risk-score thresholds with a confusion matrix."""
+        from .evaluate import threshold_sweep
+
+        return threshold_sweep(self, thresholds=thresholds)
+
+    def confusion_matrix(self, threshold: float = 50.0) -> pd.DataFrame | None:
+        """Return a customer-level confusion matrix for a combined-risk cutoff."""
+        sweep = self.threshold_sweep((threshold,))
+        if sweep is None:
+            return None
+        row = sweep.iloc[0]
+        return pd.DataFrame(
+            [[int(row["true_negative"]), int(row["false_positive"])],
+             [int(row["false_negative"]), int(row["true_positive"])]],
+            index=["Actual clear", "Actual labelled"],
+            columns=["Predicted clear", "Predicted labelled"],
+        )
+
     def to_html(self, path: str | Path, top: int = 50) -> Path:
         from .report import render_html
 
@@ -75,7 +94,7 @@ class Monitor:
 
     Example
     -------
-    >>> from amlwatch import Monitor, generate_transactions
+    >>> from traceledger import Monitor, generate_transactions
     >>> result = Monitor().run(generate_transactions(n_customers=300, seed=7))
     >>> result.alerted.head()  # doctest: +SKIP
     """
@@ -131,6 +150,26 @@ class Monitor:
             [customers["rules"] != "", customers["anomaly"] >= review_cut],
             ["alert", "anomaly_review"],
             default="clear",
+        )
+        if len(alerts):
+            evidence = alerts.groupby("customer")["detail"].apply(
+                lambda details: "; ".join(dict.fromkeys(details))
+            )
+        else:
+            evidence = pd.Series(dtype=str)
+        customers["rule_evidence"] = evidence.reindex(customers.index).fillna("")
+        customers["anomaly_explanation"] = anomaly_explanations(feats).reindex(
+            customers.index
+        ).fillna("")
+        customers["risk_explanation"] = customers.apply(
+            lambda row: "; ".join(
+                part for part in (
+                    row["rule_evidence"],
+                    f"Anomaly score {row['anomaly']:.2f}: {row['anomaly_explanation']}"
+                    if row["anomaly"] >= cfg.anomaly_review_quantile else "",
+                ) if part
+            ),
+            axis=1,
         )
         customers = customers.sort_values("risk_score", ascending=False)
         return MonitoringResult(alerts=alerts, customers=customers, transactions=df, config=cfg)

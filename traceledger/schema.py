@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from .config import RuleConfig
@@ -23,8 +24,16 @@ def prepare(df: pd.DataFrame, config: RuleConfig) -> pd.DataFrame:
     missing = [c for c in REQUIRED if c not in df.columns]
     if missing:
         raise SchemaError(f"Missing required columns: {missing}")
+    if df.empty:
+        raise SchemaError("Transaction table must contain at least one row")
 
     out = df.copy()
+    missing_values = out[list(REQUIRED)].isna().any(axis=1)
+    if missing_values.any():
+        raise SchemaError(f"{int(missing_values.sum())} rows have missing required values")
+    for column in ("sender_is_customer", "receiver_is_customer"):
+        if column in out and out[column].isna().any():
+            raise SchemaError(f"{int(out[column].isna().sum())} rows have missing {column} values")
     for col, default in OPTIONAL_DEFAULTS.items():
         if col not in out.columns:
             out[col] = default
@@ -32,7 +41,7 @@ def prepare(df: pd.DataFrame, config: RuleConfig) -> pd.DataFrame:
 
     out["timestamp"] = pd.to_datetime(out["timestamp"], errors="coerce")
     out["amount"] = pd.to_numeric(out["amount"], errors="coerce")
-    bad = out["timestamp"].isna() | out["amount"].isna()
+    bad = out["timestamp"].isna() | out["amount"].isna() | ~np.isfinite(out["amount"])
     if bad.any():
         raise SchemaError(f"{int(bad.sum())} rows have an unreadable timestamp or amount")
     if (out["amount"] < 0).any():
@@ -41,10 +50,18 @@ def prepare(df: pd.DataFrame, config: RuleConfig) -> pd.DataFrame:
     for col in ("txn_id", "sender", "receiver", "channel"):
         out[col] = out[col].astype(str)
     out["channel"] = out["channel"].str.lower()
+    blank = out[["txn_id", "sender", "receiver", "channel"]].apply(
+        lambda column: column.str.strip().eq("")
+    ).any(axis=1)
+    if blank.any():
+        raise SchemaError(f"{int(blank.sum())} rows have blank transaction identifiers or parties")
+    if out["txn_id"].duplicated().any():
+        raise SchemaError("Transaction identifiers must be unique")
 
-    if not {"sender_is_customer", "receiver_is_customer"} <= set(out.columns):
-        pattern = config.customer_pattern
+    pattern = config.customer_pattern
+    if "sender_is_customer" not in out.columns:
         out["sender_is_customer"] = out["sender"].str.match(pattern)
+    if "receiver_is_customer" not in out.columns:
         out["receiver_is_customer"] = out["receiver"].str.match(pattern)
     out["sender_is_customer"] = out["sender_is_customer"].astype(bool)
     out["receiver_is_customer"] = out["receiver_is_customer"].astype(bool)

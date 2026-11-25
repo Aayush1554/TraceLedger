@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}TraceLedger · Case {{ case.case_id }}{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="{{ url_for('dashboard') }}">← Case dashboard</a><div class="export-actions"><a class="button button-secondary" href="{{ url_for('case_csv_export', case_id=case.case_id) }}">Export case CSV</a><a class="button button-secondary" href="{{ url_for('case_report', case_id=case.case_id) }}" target="_blank">Open investigation report ↗</a></div></div>
+<section class="case-heading">
+  <div><p class="eyebrow">CASE {{ case.case_id }}</p><h1>{{ case.rule|replace('_', ' ')|title }}</h1>
+    <p class="muted">Customer <strong>{{ case.customer }}</strong> · {{ transactions|length }} linked transactions</p></div>
+  <div class="risk-card"><span>Overall risk</span><strong>{{ "%.1f"|format(case.risk_score) }}</strong><small>out of 100 · review aid only</small></div>
+</section>
+<div class="detail-grid">
+  <section class="panel"><div class="section-title"><div><p class="eyebrow">WHY THIS CASE WAS FLAGGED</p><h2>Detection evidence</h2></div><span class="status status-{{ case.status|lower|replace(' ', '-') }}">{{ case.status }}</span></div>
+    <p>{{ case.detail }}</p><div class="evidence-meta"><span>Detection strength <b>{{ "%.2f"|format(case.strength) }}</b></span><span>Rule score <b>{{ "%.2f"|format(case.rule_score) }}</b></span><span>ML anomaly percentile <b>{{ "%.2f"|format(case.anomaly) }}</b></span></div>
+    <p class="muted">{{ case.profile.anomaly_explanation }}</p>
+  </section>
+  <section class="panel"><p class="eyebrow">CUSTOMER PROFILE</p><h2>{{ case.customer }}</h2>
+    <div class="profile-grid">
+      <div><span>Transactions</span><b>{{ case.profile.transaction_count }}</b></div>
+      <div><span>Counterparties</span><b>{{ case.profile.counterparty_count }}</b></div>
+      <div><span>Incoming value</span><b>{{ "%.2f"|format(case.profile.value_in) }}</b></div>
+      <div><span>Outgoing value</span><b>{{ "%.2f"|format(case.profile.value_out) }}</b></div>
+      <div><span>High-risk exposure</span><b>{{ "%.2f"|format(case.profile.high_risk_value) }}</b></div>
+      <div><span>Frequency change</span><b>{{ "%.2f"|format(case.profile.activity_frequency_change) }}×</b></div>
+      <div><span>High-risk transfers</span><b>{{ case.profile.high_risk_transaction_count }}</b></div>
+      <div><span>Previous linked cases</span><b>{{ previous_cases }}</b></div>
+    </div>
+  </section>
+</div>
+<section class="panel"><div class="section-title"><div><p class="eyebrow">RELATIONSHIP EXPLORER</p><h2>Transaction network</h2></div><span class="muted">Directed account flows · amount and transaction time</span></div>
+  {% include "_network.html" %}
+</section>
+<section class="panel"><div class="section-title"><div><p class="eyebrow">CUSTOMER ACTIVITY</p><h2>Transaction history</h2></div><span class="muted">Latest {{ customer_history|length }} transactions in this scan</span></div>
+  {% if customer_history %}<div class="table-wrap"><table><thead><tr><th>Time</th><th>Transaction</th><th>From → To</th><th>Amount</th><th>Channel</th></tr></thead><tbody>
+    {% for txn in customer_history %}<tr><td>{{ txn.timestamp[:16]|replace("T", " ") }}</td><td>{{ txn.txn_id }}</td><td>{{ txn.sender }} → {{ txn.receiver }}</td><td>{{ "%.2f"|format(txn.amount) }}</td><td>{{ txn.channel|title }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="muted">No customer transactions were saved for this scan.</p>{% endif %}
+</section>
+<section class="detail-grid">
+  <section class="panel"><p class="eyebrow">CASE OWNERSHIP</p><h2>Investigation workflow</h2>
+    <form class="case-form" action="{{ url_for('update_case', case_id=case.case_id) }}" method="post">
+      <label>Status<select name="status">{% for status in statuses %}<option value="{{ status }}" {% if case.status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select></label>
+      <label>Assigned investigator<input name="assigned_to" value="{{ case.assigned_to }}" placeholder="Investigator name"></label>
+      <label>Updated by<input name="investigator" placeholder="Your name"></label><button type="submit">Save case changes</button>
+    </form>
+  </section>
+  <section class="panel"><p class="eyebrow">INVESTIGATION NOTES</p><h2>Working notes</h2>
+    <form class="note-form" action="{{ url_for('add_note', case_id=case.case_id) }}" method="post">
+      <label>Investigator<input name="investigator" placeholder="Your name"></label>
+      <label>Note<textarea name="note" rows="3" required placeholder="Record the finding, source, or next action…"></textarea></label>
+      <button type="submit">Add note</button>
+    </form>
+  </section>
+</section>
+<section class="detail-grid">
+  <section class="panel"><p class="eyebrow">EVIDENCE</p><h2>Linked transactions</h2>
+    {% if transactions %}<div class="table-wrap"><table><thead><tr><th>Time</th><th>Transaction</th><th>From → To</th><th>Amount</th><th>Channel</th><th>Evidence role</th></tr></thead><tbody>
+      {% for txn in transactions %}<tr><td>{{ txn.timestamp[:16]|replace("T", " ") }}</td><td>{{ txn.txn_id }}</td><td>{{ txn.sender }} → {{ txn.receiver }}</td><td>{{ "%.2f"|format(txn.amount) }}</td><td>{{ txn.channel|title }}</td><td>{% if txn.is_suspicious %}<span class="evidence-match">Matched rule</span>{% else %}<span class="muted">Context transaction</span>{% endif %}</td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<p class="muted">No matching transaction records were saved.</p>{% endif %}
+  </section>
+  <section class="panel"><p class="eyebrow">CASE HISTORY</p><h2>Audit trail</h2>
+    {% if events %}<ol class="timeline">{% for event in events %}<li><b>{{ event.action }}</b><span>{{ event.created_at[:16]|replace("T", " ") }} · {{ event.actor }}</span>
+      {% if event.old_value or event.new_value %}<p>{{ event.old_value }}{% if event.old_value %} → {% endif %}{{ event.new_value }}</p>{% endif %}</li>{% endfor %}</ol>{% else %}<p class="muted">No changes recorded.</p>{% endif %}
+    {% if notes %}<h3>Notes log</h3><ol class="timeline">{% for note in notes %}<li><b>{{ note.investigator }}</b><span>{{ note.created_at[:16]|replace("T", " ") }}</span><p>{{ note.note }}</p></li>{% endfor %}</ol>{% endif %}
+  </section>
+</section>
+{% endblock %}

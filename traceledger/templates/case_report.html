@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}TraceLedger · Investigation report {{ case.case_id }}{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="{{ url_for('case_detail', case_id=case.case_id) }}">← Back to case</a><div class="export-actions"><button class="print-button" type="button" onclick="window.print()">Print / save as PDF</button><span class="muted">Generated {{ generated }}</span></div></div>
+<section class="case-heading"><div><p class="eyebrow">TRACELEDGER · INVESTIGATION REPORT</p><h1>{{ case.rule|replace('_', ' ')|title }}</h1><p class="muted">Case {{ case.case_id }} · Customer {{ case.customer }}</p></div>
+<div class="risk-card"><span>Risk score</span><strong>{{ "%.1f"|format(case.risk_score) }}</strong><small>{{ case.status }}</small></div></section>
+<section class="panel"><p class="eyebrow">DETECTION REASON</p><h2>Evidence summary</h2><p>{{ case.detail }}</p>
+  <div class="evidence-meta"><span>Strength <b>{{ "%.2f"|format(case.strength) }}</b></span><span>Rule score <b>{{ "%.2f"|format(case.rule_score) }}</b></span><span>Anomaly percentile <b>{{ "%.2f"|format(case.anomaly) }}</b></span><span>Assigned to <b>{{ case.assigned_to or "Unassigned" }}</b></span></div></section>
+<section class="panel"><p class="eyebrow">CUSTOMER PROFILE</p><h2>Risk context</h2><p>{{ case.profile.anomaly_explanation }}</p>
+  <div class="profile-grid"><div><span>Transaction frequency</span><b>{{ case.profile.transaction_count }}</b></div><div><span>Counterparties</span><b>{{ case.profile.counterparty_count }}</b></div>
+  <div><span>Incoming value</span><b>{{ "%.2f"|format(case.profile.value_in) }}</b></div><div><span>Outgoing value</span><b>{{ "%.2f"|format(case.profile.value_out) }}</b></div>
+  <div><span>High-risk exposure</span><b>{{ "%.2f"|format(case.profile.high_risk_value) }}</b></div><div><span>Activity frequency change</span><b>{{ "%.2f"|format(case.profile.activity_frequency_change) }}×</b></div>
+  <div><span>Previous linked cases</span><b>{{ previous_cases }}</b></div></div></section>
+<section class="panel"><p class="eyebrow">RELATIONSHIPS</p><h2>Linked transaction network</h2>{% include "_network.html" %}</section>
+<section class="panel"><p class="eyebrow">TRANSACTION EVIDENCE</p><h2>Linked transactions</h2>
+  <div class="table-wrap"><table><thead><tr><th>Transaction</th><th>Timestamp</th><th>Sender</th><th>Receiver</th><th>Amount</th><th>Channel</th><th>Evidence role</th></tr></thead><tbody>
+  {% for txn in transactions %}<tr><td>{{ txn.txn_id }}</td><td>{{ txn.timestamp }}</td><td>{{ txn.sender }}</td><td>{{ txn.receiver }}</td><td>{{ "%.2f"|format(txn.amount) }}</td><td>{{ txn.channel }}</td><td>{% if txn.is_suspicious %}Matched rule{% else %}Context transaction{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div></section>
+<section class="panel"><p class="eyebrow">INVESTIGATION RECORD</p><h2>Investigator notes</h2>{{ notes_html|safe }}</section>
+<section class="panel"><p class="eyebrow">AUDIT HISTORY</p><h2>Status and assignment changes</h2>{{ audit_html|safe }}</section>
+<p class="report-disclaimer">Generated {{ generated }} by TraceLedger. Automated indicators are for investigation support and are not a determination of wrongdoing.</p>
+{% endblock %}

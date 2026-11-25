@@ -80,8 +80,8 @@ def render_html(result: MonitoringResult, top: int = 50) -> str:
     review.columns = ["Customer", "Anomaly pct", "Txns in", "Txns out", "Value in", "Value out"]
 
     sections = [
-        "<h1>Transaction monitoring report</h1>",
-        f'<p class="meta">Period {period}. Generated {generated} by amlwatch.</p>',
+        "<h1>TraceLedger · Transaction monitoring</h1>",
+        f'<p class="meta">Period {period}. Generated {generated} by TraceLedger.</p>',
         f'<div class="kpis">{kpis}</div>',
         "<h2>1. Alerts by rule</h2>",
         "<p>Table 1. Customers flagged by each rule</p>",
@@ -110,13 +110,13 @@ def render_html(result: MonitoringResult, top: int = 50) -> str:
             _table(ev, {"flagged", "positives", "true_positives", "precision", "recall", "f1"}),
             (
                 '<p class="note">Only available when the input carries a typology label, '
-                "for example synthetic data from amlwatch.generate_transactions.</p>"
+                "for example synthetic data from traceledger.generate_transactions.</p>"
             ),
         ]
 
     return (
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        f"<title>Monitoring report</title><style>{_CSS}</style></head><body>"
+        f"<title>TraceLedger monitoring report</title><style>{_CSS}</style></head><body>"
         + "\n".join(sections) + "</body></html>"
     )

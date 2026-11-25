@@ -58,3 +58,37 @@ def evaluate(result: MonitoringResult) -> pd.DataFrame | None:
             r.update(positives=nan, recall=nan, f1=nan)
             rows.append(r)
     return pd.DataFrame(rows).set_index("scope")
+
+
+def threshold_sweep(result: MonitoringResult, thresholds=(20, 40, 60, 80)) -> pd.DataFrame | None:
+    """Evaluate combined risk-score cutoffs against synthetic customer labels."""
+    df = result.transactions
+    if "typology" not in df.columns:
+        return None
+    positives = set(labelled_customers(df).index)
+    all_customers = set(result.customers.index)
+    rows = []
+    for threshold in thresholds:
+        predicted = set(result.customers.index[result.customers["risk_score"] >= threshold])
+        tp = len(predicted & positives)
+        fp = len(predicted - positives)
+        fn = len(positives - predicted)
+        tn = len(all_customers - positives - predicted)
+        precision = tp / (tp + fp) if tp + fp else float("nan")
+        recall = tp / (tp + fn) if tp + fn else float("nan")
+        f1 = (
+            2 * precision * recall / (precision + recall)
+            if not (math.isnan(precision) or math.isnan(recall)) and precision + recall
+            else float("nan")
+        )
+        rows.append({
+            "threshold": threshold,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
+            "true_positive": tp,
+            "false_positive": fp,
+            "true_negative": tn,
+            "false_negative": fn,
+        })
+    return pd.DataFrame(rows).set_index("threshold")

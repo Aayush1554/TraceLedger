@@ -25,21 +25,33 @@ class Alert:
     strength: float
     detail: str
     txn_ids: list[str] = field(default_factory=list)
+    suspicious_txn_ids: list[str] = field(default_factory=list)
     amount: float = 0.0
     first_seen: pd.Timestamp | None = None
     last_seen: pd.Timestamp | None = None
 
 
-def _alert(customer, rule, strength, detail, rows: pd.DataFrame) -> Alert:
+def _alert(
+    customer,
+    rule,
+    strength,
+    detail,
+    rows: pd.DataFrame,
+    suspicious_rows: pd.DataFrame | None = None,
+) -> Alert:
+    focus = suspicious_rows if suspicious_rows is not None else rows
     return Alert(
         customer=customer,
         rule=rule,
         strength=float(np.clip(strength, 0.0, 1.0)),
         detail=detail,
         txn_ids=rows["txn_id"].tolist(),
-        amount=float(rows["amount"].sum()),
-        first_seen=rows["timestamp"].min(),
-        last_seen=rows["timestamp"].max(),
+        suspicious_txn_ids=(
+            (suspicious_rows if suspicious_rows is not None else rows)["txn_id"].tolist()
+        ),
+        amount=float(focus["amount"].sum()),
+        first_seen=focus["timestamp"].min(),
+        last_seen=focus["timestamp"].max(),
     )
 
 
@@ -261,10 +273,69 @@ def round_trip(df: pd.DataFrame, cfg: RuleConfig) -> list[Alert]:
     return alerts
 
 
+def dormant_reactivation(df: pd.DataFrame, cfg: RuleConfig) -> list[Alert]:
+    """Flag high-value outbound transfers after a long inactive period."""
+    activity = pd.concat([
+        df[df["sender_is_customer"]].assign(customer=lambda rows: rows["sender"]),
+        df[df["receiver_is_customer"]].assign(customer=lambda rows: rows["receiver"]),
+    ]).drop_duplicates(["txn_id", "customer"]).sort_values("timestamp", kind="stable")
+    alerts = []
+    for customer, group in activity.groupby("customer", sort=False):
+        group = group.drop_duplicates("txn_id").sort_values("timestamp", kind="stable")
+        if len(group) < cfg.dormant_min_history + 1:
+            continue
+        outgoing = group[
+            group["sender_is_customer"]
+            & (group["sender"] == customer)
+            & (group["channel"] == "transfer")
+        ]
+        if outgoing.empty:
+            continue
+
+        flagged = []
+        prior_ids: list[str] = []
+        inactive_gaps = []
+        for _, row in outgoing.iterrows():
+            earlier = group[group["timestamp"] < row["timestamp"]]
+            if len(earlier) < cfg.dormant_min_history:
+                continue
+            last_active = earlier["timestamp"].max()
+            if row["timestamp"] - last_active < pd.Timedelta(days=cfg.dormant_inactive_days):
+                continue
+            history = earlier.tail(cfg.dormant_min_history)
+            amount_floor = max(
+                cfg.dormant_min_amount,
+                float(earlier["amount"].median()) * cfg.dormant_amount_multiplier,
+            )
+            if row["amount"] >= amount_floor:
+                flagged.append(row)
+                prior_ids.extend(history["txn_id"].tolist())
+                inactive_gaps.append(int((row["timestamp"] - last_active).total_seconds() // 86400))
+
+        if not flagged:
+            continue
+        suspicious = pd.DataFrame(flagged)
+        ids = list(dict.fromkeys([*prior_ids, *suspicious["txn_id"].tolist()]))
+        evidence = df[df["txn_id"].isin(ids)]
+        alerts.append(_alert(
+            customer,
+            "dormant_account",
+            0.65 + 0.1 * min(len(flagged), 3),
+            f"{len(flagged)} high-value transfer(s) after an inactivity gap of "
+            f"{max(inactive_gaps)} days; each exceeded "
+            f"{cfg.dormant_amount_multiplier:.1f}x the historical median "
+            f"and {cfg.dormant_min_amount:,.0f}",
+            evidence,
+            suspicious_rows=suspicious,
+        ))
+    return alerts
+
+
 RULES: dict[str, Callable[[pd.DataFrame, RuleConfig], list[Alert]]] = {
     "structuring": structuring,
     "pass_through": pass_through,
     "fan_in": fan_in,
     "high_risk_corridor": high_risk_corridor,
     "round_trip": round_trip,
+    "dormant_account": dormant_reactivation,
 }
